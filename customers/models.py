@@ -8,8 +8,8 @@ class Customer(models.Model):
         related_name="customers"
     )
     name = models.CharField(max_length=255)
-    email = models.EmailField()
-    phone_number = models.CharField(max_length=50, blank=True,null=True)
+    phone_number =models.CharField(max_length=255)
+    email = models.CharField(max_length=50, blank=True,null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
