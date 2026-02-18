@@ -1,13 +1,27 @@
 from rest_framework import generics
 from .models import Invoice
 from .serializers import InvoiceSerializer
+from rest_framework.permissions import IsAuthenticated
 
 
 class InvoiceListCreateView(generics.ListCreateAPIView):
-    queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        query_set =  Invoice.objects.filter(user = self.request.user)
+    
+        for invoice in query_set:
+            invoice.update_overdue_status()
+        
+        return query_set
 
 
 class InvoiceDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        query_set=  Invoice.objects.filter(user = self.request.user)
+        for invoice in query_set:
+            invoice.update_overdue_status()
+    

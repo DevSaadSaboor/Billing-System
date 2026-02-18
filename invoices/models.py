@@ -67,6 +67,11 @@ class Invoice(models.Model):
 
         self.save(update_fields=["status"]) 
             
+    def update_overdue_status(self):
+        if self.status != 'paid' and self.due_date < timezone.now():
+            self.status = 'overdue'
+            self.save(update_fields=["status"])
+
 
     def __str__(self):
         return f"Invoice {self.invoice_number} - {self.customer.name}"
