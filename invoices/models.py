@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from customers.models import Customer
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 
 class Invoice(models.Model):
@@ -40,13 +41,33 @@ class Invoice(models.Model):
     note = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def save(self,*args,**kwargs):
+        if kwargs.get("update_fields"):
+            super().save(*args, **kwargs)
+            return
+        if self.pk:
+            old_invoice = Invoice.objects.get(pk = self.pk)
+
+            if old_invoice.status != "draft":
+             raise ValidationError("Only draft invoices can be updated")
+            
+            if old_invoice.status != "draft" and self.status == "paid":
+             raise ValidationError("Draft invoice cannot be marked as paid")
+        super().save(*args,**kwargs)
+    
+    def delete(self,*args, **kwargs):
+        if self.status != "draft":
+            raise ValidationError("Only draft invoices can be deleted")
+        super().delete(*args,**kwargs)
+
+
     def recalculate_totals(self):
          items = self.line_items.all()
 
          subtotal = sum(item.line_subtotal for item in items)
          tax_total = sum(item.line_tax for item in items)
          grand_total = sum(item.line_total for item in items)
-
+    
          self.subtotal = subtotal
          self.tax_total = tax_total
          self.grand_total = grand_total
@@ -63,7 +84,7 @@ class Invoice(models.Model):
             if self.due_date and self.due_date < timezone.now():
                 self.status = "overdue"
             else:
-                self.status = "send"
+                self.status = "sent"
 
         self.save(update_fields=["status"]) 
             

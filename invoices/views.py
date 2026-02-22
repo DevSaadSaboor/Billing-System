@@ -6,6 +6,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Sum
 from datetime import datetime
+from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
+from rest_framework import status
+
 class InvoiceListCreateView(generics.ListCreateAPIView):
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated]
@@ -35,6 +39,8 @@ class InvoiceDetailView(generics.RetrieveUpdateAPIView):
         query_set=  Invoice.objects.filter(user = self.request.user)
         for invoice in query_set:
             invoice.update_overdue_status()
+        
+        return query_set
 
 class InvoiceSummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -63,5 +69,21 @@ class InvoiceSummaryView(APIView):
             "outstanding_amount": outstanding_amount
         })
         
+class SendInvoiceview(APIView):
+    def post(self,request,pk):
+        invoice = get_object_or_404(Invoice,pk=pk, user = request.user)
 
+        if invoice.status != "draft":
+            return Response({"detail": "Only draft invoices can be sent."}, status=status.HTTP_400_BAD_REQUEST)
+        if not invoice.line_items.exists():
+            return Response({"detail": "Only draft invoices can be sent."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        invoice.status ="sent"
+        invoice.save(update_fields=["status"])
+
+        serializer = InvoiceSerializer(invoice)
+        return Response(serializer.data)
+
+
+        
     
