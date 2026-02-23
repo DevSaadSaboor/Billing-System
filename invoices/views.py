@@ -5,54 +5,80 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Sum
-from datetime import datetime
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.filters import OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import InvoiceFilter
+from django.utils import timezone
 
 class InvoiceListCreateView(generics.ListCreateAPIView):
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        query_set =  Invoice.objects.filter(user = self.request.user)
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filtering_class = InvoiceFilter
+    ordering_fields = ["issue_date", "due_date","grand_total", "created_at"]
+    ordering = ["-created_at"]
     
-        for invoice in query_set:
-            invoice.update_overdue_status()
+    def get_queryset(self):
+        # query_set =  Invoice.objects.filter(user = self.request.user)
 
-        status = self.request.query_params.get("status")
-        customer_id = self.request.query_params.get("customer")
+        Invoice.objects.filter(
+            user = self.request.user,
+            status__in = ["draft", "sent"],
+            due_date__isnull=False,
+            due_date__lt = timezone.now(),
+        ).update(status = "overdue")
 
-        if status:
-            query_set = query_set.filter(status=status)
+        return Invoice.objects.filter(user = self.request.user)
+    
+        # for invoice in query_set:
+        #     invoice.update_overdue_status()
+        # status = self.request.query_params.get("status")
+        # customer_id = self.request.query_params.get("customer")
+        # if status:
+        #     query_set = query_set.filter(status=status)
+        # if customer_id:
+        #     query_set = query_set.filter(customer_id=customer_id)
+        # return query_set
 
-        if customer_id:
-            query_set = query_set.filter(customer_id=customer_id)
-
-        return query_set
-
+    
 
 class InvoiceDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated]
     def get_queryset(self):
-        query_set=  Invoice.objects.filter(user = self.request.user)
-        for invoice in query_set:
-            invoice.update_overdue_status()
-        
-        return query_set
+
+        Invoice.objects.filter(
+            user = self.request.user,
+            status__in = ["draft","sent"],
+            due_date__isnull=False,
+            due_date__lt = timezone.now()
+        ).update(status = "overdue")
+
+        # query_set=  Invoice.objects.filter(user = self.request.user)
+        # for invoice in query_set:
+        #     invoice.update_overdue_status()
+        # return query_set
 
 class InvoiceSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self,request):
         query_set = Invoice.objects.filter(user = self.request.user)
-        start_date = request.query_params.get("start_date")
-        end_date = request.query_params.get("end_date")
-        if start_date:
-            query_set = query_set.filter(issue_date__date__gte = start_date)
-        if end_date:
-            query_set = query_set.filter(issue_date__date__lte = end_date)
+        filterset = InvoiceFilter(request.GET, queryset=query_set)
+        query_set = filterset.qs
+
+
+        # start_date = request.query_params.get("start_date")
+        # end_date = request.query_params.get("end_date")
+        # if start_date:
+        #     query_set = query_set.filter(issue_date__date__gte = start_date)
+        # if end_date:
+        #     query_set = query_set.filter(issue_date__date__lte = end_date)
+
         total_invoices = query_set.count()
         paid_count = query_set.filter(status = "paid").count()
         overdue_count = query_set.filter(status = "overdue").count()

@@ -6,42 +6,49 @@ from rest_framework.exceptions import ValidationError
 
 
 class Invoice(models.Model):
-    STATUS_CHOICES = [
+     class Meta:
+           constraints = [
+            models.UniqueConstraint(
+                fields = ["user", "invoice_number"],
+                name = "unique_invoice_per_user"
+            )
+        ]
+     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("sent", "Sent"),
         ("paid", "Paid"),
         ("overdue", "Overdue"),
     ]
 
-    user = models.ForeignKey(
+     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name="invoices"
     )
-    customer = models.ForeignKey(
+     customer = models.ForeignKey(
         Customer,
         on_delete=models.CASCADE,
         related_name="invoices"
     )
 
-    invoice_number = models.CharField(max_length=50)
-    issue_date = models.DateTimeField()
-    due_date = models.DateTimeField(blank=True, null=True)
+     invoice_number = models.CharField(max_length=50)
+     issue_date = models.DateTimeField()
+     due_date = models.DateTimeField(blank=True, null=True)
 
-    status = models.CharField(
+     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="draft"
     )
 
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    tax_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+     tax_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    note = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+     note = models.TextField(blank=True, null=True)
+     created_at = models.DateTimeField(auto_now_add=True)
 
-    def save(self,*args,**kwargs):
+     def save(self,*args,**kwargs):
         if kwargs.get("update_fields"):
             super().save(*args, **kwargs)
             return
@@ -55,13 +62,13 @@ class Invoice(models.Model):
              raise ValidationError("Draft invoice cannot be marked as paid")
         super().save(*args,**kwargs)
     
-    def delete(self,*args, **kwargs):
+     def delete(self,*args, **kwargs):
         if self.status != "draft":
             raise ValidationError("Only draft invoices can be deleted")
         super().delete(*args,**kwargs)
 
 
-    def recalculate_totals(self):
+     def recalculate_totals(self):
          items = self.line_items.all()
 
          subtotal = sum(item.line_subtotal for item in items)
@@ -73,7 +80,7 @@ class Invoice(models.Model):
          self.grand_total = grand_total
          self.save(update_fields=['subtotal', 'tax_total', 'grand_total'])
 
-    def update_status_from_payments(self):
+     def update_status_from_payments(self):
         payments = self.payments.all()
         total_paid = sum(payment.amount for payment in payments)
 
@@ -88,13 +95,13 @@ class Invoice(models.Model):
 
         self.save(update_fields=["status"]) 
             
-    def update_overdue_status(self):
+     def update_overdue_status(self):
         if self.status != 'paid' and self.due_date < timezone.now():
             self.status = 'overdue'
             self.save(update_fields=["status"])
 
 
-    def __str__(self):
+     def __str__(self):
         return f"Invoice {self.invoice_number} - {self.customer.name}"
 
 
@@ -127,7 +134,8 @@ class InvoiceLineItem(models.Model):
         invoice = self.invoice
         super().delete(*args,**kwargs)
         invoice.recalculate_totals()
-
+    
+   
 
     def __str__(self):
         return f"{self.description} (Invoice {self.invoice.invoice_number})"
